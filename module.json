@@ -1,0 +1,12 @@
+{
+  "id": "MechanicalTurkeyz",
+  "name": "MechanicalTurkeyz",
+  "author": "chuck",
+  "version": "1.0.0",
+  "released": "10/3/2020",
+  "updated": "10/3/2020",
+  "description": "Mechanical Turk Keyword patcher",
+  "requires": ["unifiedPatchingFramework"],
+  "moduleLoader": "UPF",
+  "canHotLoad": true
+}
