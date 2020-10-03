@@ -169,16 +169,27 @@ registerPatcher<Locals, Settings>({
                 return false;
               }
 
-              if (
-                !(
-                  xelib.HasElement(armo, 'Armature') &&
-                  xelib.HasElement(armo, 'Armature\\[0]')
-                )
-              ) {
+              if (!xelib.HasElement(armo, 'Armature')) {
                 // Ignore AMRO with no ARMAs?
                 return false;
               }
+              // Try to find "people" ARMAs?
+              // @ts-ignore
+              const armas = xelib.GetElements(armo, 'Armature');
+              if (
+                !armas.some((el) => {
+                  const arma = xelib.GetWinningOverride(
+                    xelib.GetLinksTo(el, '')
+                  );
+                  const rnam = xelib.GetLinksTo(arma, 'RNAM');
+                  return rnam && xelib.ElementEquals(rnam, DefaultRace);
+                })
+              ) {
+                // Ignore if no DefaultRace ARMAs?
+                return false;
+              }
 
+              /*
               if (
                 !xelib.ElementEquals(
                   xelib.GetLinksTo(armo, 'RNAM'),
@@ -189,6 +200,7 @@ registerPatcher<Locals, Settings>({
                 // Seems to be best way to find "people" armors
                 return false;
               }
+               */
 
               const bod = getBodyTemplate(armo);
               if (bod === 0) {
