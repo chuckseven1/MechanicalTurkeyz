@@ -297,14 +297,64 @@ interface Locals {
   keywordsToPatch: { [recordid: string]: string[] };
 }
 
+/**
+ * Load memories from a file.
+ *
+ * @see Memories
+ * @todo validate format
+ */
+function loadMemories(filename: string = memoryFile): Memories {
+  // loadJsonFile seems to return undefined despite my default of {}?
+  const contents: unknown = fh.loadJsonFile(filename, {}) ?? {};
+
+  return contents as Memories;
+}
+/**
+ * Save memories to a file.
+ *
+ * @see Memories
+ */
+function saveMemories(memories: Memories, filename: string = memoryFile): void {
+  fh.saveJsonFile(filename, memories as any);
+}
+
+/**
+ * Ask user for external memories file,
+ * then merge it into our memories.
+ *
+ * @see Memories
+ * @see memoryFile
+ */
+function importMemories() {
+  // Ask user for a file
+  const filename = fh.selectFile(`${info.name} Memory Files`, '', [
+    { name: 'JSON files', extensions: ['json'] },
+  ]);
+  if (!filename) {
+    return;
+  }
+
+  // Load memories
+  const oldMemories = loadMemories();
+  const newMemories = loadMemories(filename);
+
+  // Merge memories, preferring old ones if conflict
+  const memories = Object.assign(oldMemories, newMemories);
+
+  // Save new combined memories
+  saveMemories(memories);
+}
+
 registerPatcher<Locals, Settings>({
   info: info,
   gameModes: [xelib.gmSSE, xelib.gmTES5],
   settings: {
     label: 'Mechanical Turk armor keywords',
     templateUrl: `${patcherUrl}/partials/settings.html`,
-    // Add variables needed for rending settings?
     controller($scope: any) {
+      // Add callbacks
+      $scope.importMemories = importMemories;
+      // Add variables needed for rending settings?
       $scope.knownKeywords = Object.keys(keywords);
       $scope.models = Object.keys(Model);
     },
@@ -329,8 +379,7 @@ registerPatcher<Locals, Settings>({
         function doInitialize() {
           return {
             dir: xelib.GetGlobal('DataPath'),
-            taggednifs: ((fh.loadJsonFile(memoryFile, {}) ??
-              {}) as unknown) as Memories,
+            taggednifs: loadMemories(),
             // Look up DefaultRace
             DefaultRace: xelib.GetRecord(0, 0x19),
             keywords: settings.keywords.map((keyword) => {
@@ -774,7 +823,7 @@ registerPatcher<Locals, Settings>({
             });
 
             // Update memory
-            fh.saveJsonFile(memoryFile, taggednifs as any);
+            saveMemories(taggednifs);
 
             // Wait for viewer to close
             await viewer;
