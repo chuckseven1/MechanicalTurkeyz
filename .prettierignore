@@ -1,5 +1,9 @@
 # Ignore compiled TS output
-lib
+dist
+*.zip
+
+LICENSE
 
 yarn.lock
+yarn-error.log
 tags*

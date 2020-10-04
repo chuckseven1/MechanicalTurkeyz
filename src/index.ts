@@ -242,6 +242,11 @@ const keywords: Record<string, KeywordInfo> = <const>{
   },
 };
 
+enum Model {
+  Male = 'Male world model\\MOD2',
+  Female = 'Female world model\\MOD3',
+}
+
 interface Settings {
   /**
    * Path to program to view nifs
@@ -257,6 +262,12 @@ interface Settings {
    * Whether to recheck "maybe" answers
    */
   redoMaybes: boolean;
+  /**
+   * Which model to display when asking user about keywords.
+   *
+   * @todo add both setting?
+   */
+  displayModel: keyof typeof Model;
 }
 
 interface Locals {
@@ -292,10 +303,16 @@ registerPatcher<Locals, Settings>({
   settings: {
     label: 'Mechanical Turk armor keywords',
     templateUrl: `${patcherUrl}/partials/settings.html`,
+    // Add variables needed for rending settings?
+    controller($scope: any) {
+      $scope.knownKeywords = Object.keys(keywords);
+      $scope.models = Object.keys(Model);
+    },
     defaultSettings: <const>{
       nifViewer: 'CalienteTools/BodySlide/OutfitStudio x64.exe',
       keywords: ['SOS_Revealing'],
       redoMaybes: false,
+      displayModel: 'Female',
     },
   },
   getFilesToPatch(filenames) {
@@ -303,7 +320,7 @@ registerPatcher<Locals, Settings>({
     return filenames.filter((filename) => filename !== 'zEBD.esp');
   },
   execute(patchFile, helpers, settings, locals) {
-    const { redoMaybes } = settings;
+    const { redoMaybes, displayModel } = settings;
 
     return {
       initialize() {
@@ -341,6 +358,7 @@ registerPatcher<Locals, Settings>({
               const armo = xelib.GetWinningOverride(record);
               const editorid = xelib.EditorID(armo);
 
+              // Track the keywords to maybe apply to this record
               keywordsToPatch[editorid] = settings.keywords.concat();
               function removeKeyword(keyword: string) {
                 keywordsToPatch[editorid] = keywordsToPatch[editorid].filter(
@@ -483,8 +501,7 @@ registerPatcher<Locals, Settings>({
             const nifs = armas
               .map((arma) =>
                 // TODO: handle alternate textures?
-                // TODO: handle male/female models?
-                xelib.GetValue(arma, 'Female world model\\MOD3')
+                xelib.GetValue(arma, Model[displayModel])
               )
               .filter((nif) => !!nif)
               .map((nif) => `meshes\\${nif}`);
@@ -649,7 +666,6 @@ registerPatcher<Locals, Settings>({
             const choices = await Promise.map(
               keywordsToAsk,
               (keyword) =>
-                // TODO: Show dialog and viewer at same time?
                 (dialog.showMessageBox({
                   // @ts-ignore
                   type: 'question',

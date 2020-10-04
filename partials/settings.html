@@ -1,9 +1,30 @@
-<h2>zFem</h2>
+<h2>MechanicalTurkeyz</h2>
 
 <section>
-    <ignore-plugins patcher-id="MechanicalTurkeyz"></ignore-plugins>
+  <ignore-plugins patcher-id="MechanicalTurkeyz"></ignore-plugins>
 </section>
 
+<!-- IDK how to GUI so I'll just stick a bunch of <br>s in it -->
 <section>
-    <input type="text" ng-model="settings.MechanicalTurkeyz.nifViewer">NIF Viewer</input>
+  NIF Viewer
+  <input type="text" ng-model="settings.MechanicalTurkeyz.nifViewer" />
+  <br />
+  <br />
+  Keywords to patch
+  <select
+    multiple
+    ng-model="settings.MechanicalTurkeyz.keywords"
+    ng-options="kOption for kOption in knownKeywords"
+  ></select>
+  <br />
+  <br />
+  Redo "maybes"
+  <input type="checkbox" ng-model="settings.MechanicalTurkeyz.redoMaybes" />
+  <br />
+  <br />
+  Models to display
+  <select
+    ng-model="settings.MechanicalTurkeyz.displayModel"
+    ng-options="dOption for dOption in models"
+  ></select>
 </section>
