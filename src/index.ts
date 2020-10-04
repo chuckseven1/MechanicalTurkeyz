@@ -584,6 +584,7 @@ registerPatcher<Locals, Settings>({
               const { type } = keywords[keyword];
 
               // Try to choose tag automagically based on relevant past answers
+              // TODO: Clean up this logic?
               switch (type) {
                 case KeywordType.Inclusive:
                   // Assume yes if single yes?
@@ -656,13 +657,14 @@ registerPatcher<Locals, Settings>({
 
             // Ask user about remaining keywords
             // TODO: Make single dialog for multipe keywords?
-            const buttons = <const>[
-              'Yes',
+            enum Choice {
+              'Yes' = 0,
               'Maybe Yes',
               'Maybe No',
               'No',
               'Cancel',
-            ];
+            }
+            const buttons = Object.keys(Choice);
             const choices = await Promise.map(
               keywordsToAsk,
               (keyword) =>
@@ -671,52 +673,93 @@ registerPatcher<Locals, Settings>({
                   type: 'question',
                   message: `Apply ${keyword}?`,
                   title: editorid,
-                  buttons: [...buttons],
-                }) as unknown) as number
+                  buttons,
+                }) as unknown) as Choice
             );
 
             // Do "learning" from user answers
             choices.forEach((choice, i) => {
               const keyword = keywordsToAsk[i];
+              const { type } = keywords[keyword];
 
-              if (keywords[keyword].type !== KeywordType.Exclusive) {
-                // TODO: Implement other keyword types
-                throw new Error('Not yet implemented');
-              }
-
-              switch (buttons[choice]) {
-                case 'Yes':
-                case 'Maybe Yes':
-                  // Apply tag to this ARMO
-                  xelib.AddKeyword(armo, keyword);
-                  // Record all nifs as keyword
-                  hashes.forEach((hash) =>
-                    addAnswer(
-                      keyword,
-                      hash,
-                      choice === 0 ? Answer.Yes : Answer.MaybeYes
-                    )
-                  );
-                  break;
-                case 'No':
-                case 'Maybe No':
-                  // Filter out relevant nifs that are definitely revealing
-                  const hhashes = relevantHashes[keyword].filter(
-                    (_, i) => relevantAnswers[keyword][i] !== Answer.Yes
-                  );
-                  // If only one nif left, it must be the non-revealing one
-                  if (hhashes.length === 1) {
-                    addAnswer(
-                      keyword,
-                      hhashes[0],
-                      choice === 3 ? Answer.No : Answer.MaybeNo
-                    );
-                  } else {
-                    // TODO: How to handle No answer with multiple nifs invloved?
+              // TODO: Clean up this logic?
+              switch (type) {
+                case KeywordType.Inclusive:
+                  switch (choice) {
+                    case Choice['Yes']:
+                    case Choice['Maybe Yes']:
+                      // Filter out relevant nifs that are definitely not tag
+                      const hhashes = relevantHashes[keyword].filter(
+                        (_, i) => relevantAnswers[keyword][i] !== Answer.No
+                      );
+                      // If only one nif left, it must be the keyword one
+                      if (hhashes.length === 1) {
+                        addAnswer(
+                          keyword,
+                          hhashes[0],
+                          choice === Choice['Yes']
+                            ? Answer.Yes
+                            : Answer.MaybeYes
+                        );
+                      } else {
+                        // TODO: How to handle Yes answer with multiple nifs invloved?
+                      }
+                      break;
+                    case Choice['No']:
+                    case Choice['Maybe No']:
+                      // Record all nifs as not keyword
+                      hashes.forEach((hash) =>
+                        addAnswer(
+                          keyword,
+                          hash,
+                          choice === Choice['No'] ? Answer.No : Answer.MaybeNo
+                        )
+                      );
+                      break;
+                    case Choice['Cancel']:
+                      throw new Error('Cancelled by user');
                   }
                   break;
-                case 'Cancel':
-                  throw new Error('Cancelled by user');
+                case KeywordType.Exclusive:
+                  switch (choice) {
+                    case Choice['Yes']:
+                    case Choice['Maybe Yes']:
+                      // Apply tag to this ARMO
+                      xelib.AddKeyword(armo, keyword);
+                      // Record all nifs as keyword
+                      hashes.forEach((hash) =>
+                        addAnswer(
+                          keyword,
+                          hash,
+                          choice === Choice['Yes']
+                            ? Answer.Yes
+                            : Answer.MaybeYes
+                        )
+                      );
+                      break;
+                    case Choice['No']:
+                    case Choice['Maybe No']:
+                      // Filter out relevant nifs that are definitely revealing
+                      const hhashes = relevantHashes[keyword].filter(
+                        (_, i) => relevantAnswers[keyword][i] !== Answer.Yes
+                      );
+                      // If only one nif left, it must be the non-revealing one
+                      if (hhashes.length === 1) {
+                        addAnswer(
+                          keyword,
+                          hhashes[0],
+                          choice === Choice['No'] ? Answer.No : Answer.MaybeNo
+                        );
+                      } else {
+                        // TODO: How to handle No answer with multiple nifs invloved?
+                      }
+                      break;
+                    case Choice['Cancel']:
+                      throw new Error('Cancelled by user');
+                  }
+                  break;
+                default:
+                  return invalidKeywordType(type);
               }
             });
 
