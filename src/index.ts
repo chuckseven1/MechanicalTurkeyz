@@ -347,6 +347,17 @@ registerPatcher<Locals, Settings>({
 
         locals = doInitialize();
       },
+      /**
+       * Clean up any of our KYWD records we didn't use.
+       */
+      finalize() {
+        for (const { id } of locals.keywords) {
+          const refrs = xelib.GetREFRs(patchFile, id);
+          if (refrs.length === 0) {
+            xelib.RemoveElement(patchFile, id);
+          }
+        }
+      },
       process: [
         {
           load: {
