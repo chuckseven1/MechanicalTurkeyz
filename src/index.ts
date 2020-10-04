@@ -316,7 +316,6 @@ registerPatcher<Locals, Settings>({
     },
   },
   getFilesToPatch(filenames) {
-    // TODO: Figure out why ignoring zEBD in GUI doesn't work
     return filenames.filter((filename) => filename !== 'zEBD.esp');
   },
   execute(patchFile, helpers, settings, locals) {
@@ -664,7 +663,7 @@ registerPatcher<Locals, Settings>({
               'No',
               'Cancel',
             }
-            const buttons = Object.keys(Choice);
+            const buttons = Object.keys(Choice).filter((k) => isNaN(+k));
             const choices = await Promise.map(
               keywordsToAsk,
               (keyword) =>
