@@ -7,7 +7,7 @@ import { remote } from 'electron';
 
 import type * as Bluebird from 'bluebird';
 
-import { ElementHandle, RecordHandle } from 'xelib';
+import type { ElementHandle, RecordHandle } from 'xelib';
 
 export = 0;
 
@@ -16,7 +16,7 @@ const { dialog } = remote;
 // Promise global is bluebird
 declare const Promise: typeof Bluebird;
 
-enum Answer {
+const enum Answer {
   /**
    * Tag definitely applies (do not ask again)
    */
@@ -78,11 +78,11 @@ function getBodyTemplate(record: RecordHandle): ElementHandle | 0 {
  *
  * @todo better names?
  */
-enum KeywordType {
+const enum KeywordType {
   /**
-   * If part of a thing is this keyword the whole thing is.
+   * If any part of a thing is this keyword the whole thing is.
    *
-   * @example ArmorHelmet
+   * @example ArmorHelmet?
    */
   Inclusive,
   /**
@@ -98,18 +98,90 @@ function invalidKeywordType(type: never): never {
 }
 
 /**
- * @todo add other body slots
+ * Body slots
  */
-enum BodySlot {
+const enum BodySlot {
   Head = '30 - Head',
   Hair = '31 - Hair',
   Body = '32 - Body',
   Hands = '33 - Hands',
   Forearms = '34 - Forearms',
+  Amulet = '35 - Amulet',
+  Ring = '36 - Ring',
+  Feet = '37 - Feet',
+  Calves = '38 - Calves',
+  Shield = '39 - Shield',
+  Tail = '40 - Tail',
   LongHair = '41 - LongHair',
   Circlet = '42 - Circlet',
   Ears = '43 - Ears',
-  SoS = '52 - Unnamed',
+  /**
+   * face/mouth
+   */
+  FaceMouth = '44 - Unnamed',
+  /**
+   * neck (like a cape, scarf, shawl, neck-tie etc.)
+   */
+  Neck = '45 - Unnamed',
+  /**
+   * chest primary or outergarment
+   */
+  ChestPrimary = '46 - Unnamed',
+  /**
+   * back (like a backpack/wings etc.)
+   */
+  Back = '47 - Unnamed',
+  /**
+   * misc/FX
+   */
+  Misc48 = '48 - Unnamed',
+  /**
+   * pelvis primary or outergarment
+   */
+  PelvisPrimary = '49 - Unnamed',
+  DecapitatedHead = '50 - DecapitateHead',
+  Decapitate = '51 - Decapitate',
+  /**
+   * pelvis secondary or undergarment
+   */
+  PelvisSecondary = '52 - Unnamed',
+  /**
+   * slot used by SoS
+   */
+  SoS = PelvisSecondary,
+  /**
+   * leg primary or outergarment or right leg
+   */
+  LegPrimary = '53 - Unnamed',
+  /**
+   * leg secondary or undergarment or left leg
+   */
+  LegSecondary = '54 - Unnamed',
+  /**
+   * face alternate or jewelry
+   */
+  FaceAlternate = '55 - Unnamed',
+  /**
+   * chest secondary or undergarment
+   */
+  ChestSecondary = '56 - Unnamed',
+  /**
+   * shoulder
+   */
+  Shoulder = '57 - Unnamed',
+  /**
+   * arm secondary or undergarment or left arm
+   */
+  ArmSecondary = '58 - Unnamed',
+  /**
+   * arm primary or outergarment or right arm
+   */
+  ArmPrimary = '59 - Unnamed',
+  /**
+   * misc/FX
+   */
+  Misc60 = '60 - Unnamed',
+  FX01 = '61 - FX01',
 }
 
 /**
@@ -131,28 +203,32 @@ interface KeywordInfo {
   /**
    * Relevant slots (i.e., slots to which this keyword might apply).
    */
-  relevantSlots: BodySlot[];
+  relevantSlots: readonly BodySlot[];
   /**
    * Irrelevant slots (i.e., slots which can be ignored).
    */
-  irrelevantSlots: BodySlot[];
+  irrelevantSlots: readonly BodySlot[];
   /**
    * Slots which mean keywords should not be applied.
    * (e.g., slot 52 for SOS_Revealing)
    */
-  skipSlots: BodySlot[];
+  skipSlots: readonly BodySlot[];
 }
 
 /**
  * Known keywords.
+ *
  * @todo read these from a JSON file or something so adding to it is easier.
  */
-const keywords: Record<string, KeywordInfo> = {
+const keywords: Record<string, KeywordInfo> = <const>{
   SOS_Revealing: {
     id: 'SOS_Revealing',
     description: 'SoS revealing keyword',
     type: KeywordType.Exclusive,
     relevantSlots: [BodySlot.Body],
+    /**
+     * @todo add more slots to this list?
+     */
     irrelevantSlots: [
       BodySlot.Head,
       BodySlot.Hair,
@@ -176,7 +252,7 @@ interface Settings {
   /**
    * Keywords to apply
    */
-  keywords: string[];
+  keywords: readonly string[];
   /**
    * Whether to recheck "maybe" answers
    */
@@ -203,7 +279,7 @@ interface Locals {
    *
    * @see KeywordInfo
    */
-  keywords: KeywordInfo[];
+  keywords: readonly KeywordInfo[];
   /**
    * List of keywords that need patching.
    */
@@ -216,7 +292,7 @@ registerPatcher<Locals, Settings>({
   settings: {
     label: 'Mechanical Turk armor keywords',
     templateUrl: `${patcherUrl}/partials/settings.html`,
-    defaultSettings: {
+    defaultSettings: <const>{
       nifViewer: 'CalienteTools/BodySlide/OutfitStudio x64.exe',
       keywords: ['SOS_Revealing'],
       redoMaybes: false,
@@ -265,7 +341,7 @@ registerPatcher<Locals, Settings>({
               const armo = xelib.GetWinningOverride(record);
               const editorid = xelib.EditorID(armo);
 
-              keywordsToPatch[editorid] = settings.keywords;
+              keywordsToPatch[editorid] = settings.keywords.concat();
               function removeKeyword(keyword: string) {
                 keywordsToPatch[editorid] = keywordsToPatch[editorid].filter(
                   (k) => k !== keyword
@@ -417,7 +493,7 @@ registerPatcher<Locals, Settings>({
               return;
             }
 
-            let hashes: string[];
+            let hashes: readonly string[];
             try {
               // Hash the nifs
               hashes = await Promise.map(nifs, (nif) => {
@@ -443,7 +519,7 @@ registerPatcher<Locals, Settings>({
             helpers.logMessage(`Found nifs for ${editorid}: ${nifs}`);
 
             // Get previous answers about nif keywords
-            const answers: { [keyword: string]: Answered[] } = {};
+            const answers: { [keyword: string]: readonly Answered[] } = {};
             keywordsToPatch.forEach((keyword) => {
               answers[keyword] = hashes.map((hash) => {
                 const answer = taggednifs[hash]?.keywords[keyword];
@@ -460,7 +536,9 @@ registerPatcher<Locals, Settings>({
               });
             });
             // Get previous answers about nif keywords for only relevant ARMAs
-            const relevantAnswers: { [keyword: string]: Answered[] } = {};
+            const relevantAnswers: {
+              [keyword: string]: readonly Answered[];
+            } = {};
             const relevantHashes: { [keyword: string]: string[] } = {};
             keywordsToPatch.forEach((keyword) => {
               const { irrelevantSlots } = keywords[keyword];
@@ -487,12 +565,36 @@ registerPatcher<Locals, Settings>({
             const keywordsToAsk: string[] = [];
             keywordsToPatch.forEach((keyword) => {
               const { type } = keywords[keyword];
+
+              // Try to choose tag automagically based on relevant past answers
               switch (type) {
                 case KeywordType.Inclusive:
-                  // TODO: Implement this type
-                  throw new Error('Not yet implemented');
+                  // Assume yes if single yes?
+                  if (
+                    relevantAnswers[keyword].some(
+                      (answer) => answer === Answer.Yes
+                    )
+                  ) {
+                    helpers.logMessage(
+                      `One of the relevant nifs already known to be ${keyword}`
+                    );
+                    // Apply tag to this ARMO
+                    return xelib.AddKeyword(armo, keyword);
+                  }
+                  // Assume no if all no?
+                  if (
+                    relevantAnswers[keyword].every(
+                      (answer) => answer === Answer.No
+                    )
+                  ) {
+                    helpers.logMessage(
+                      `One of the relevant nifs already known to not be ${keyword}`
+                    );
+                    return;
+                  }
+                  break;
                 case KeywordType.Exclusive:
-                  // Try to choose tag automagically based on relevant past answers
+                  // Assume yes if all yes
                   if (
                     relevantAnswers[keyword].every(
                       (answer) => answer === Answer.Yes
@@ -536,6 +638,14 @@ registerPatcher<Locals, Settings>({
             );
 
             // Ask user about remaining keywords
+            // TODO: Make single dialog for multipe keywords?
+            const buttons = <const>[
+              'Yes',
+              'Maybe Yes',
+              'Maybe No',
+              'No',
+              'Cancel',
+            ];
             const choices = await Promise.map(
               keywordsToAsk,
               (keyword) =>
@@ -545,7 +655,7 @@ registerPatcher<Locals, Settings>({
                   type: 'question',
                   message: `Apply ${keyword}?`,
                   title: editorid,
-                  buttons: ['Yes', 'Maybe Yes', 'Maybe No', 'No', 'Cancel'],
+                  buttons: [...buttons],
                 }) as unknown) as number
             );
 
@@ -558,9 +668,9 @@ registerPatcher<Locals, Settings>({
                 throw new Error('Not yet implemented');
               }
 
-              switch (choice) {
-                case 0: // Yes
-                case 1: // MaybeYes
+              switch (buttons[choice]) {
+                case 'Yes':
+                case 'Maybe Yes':
                   // Apply tag to this ARMO
                   xelib.AddKeyword(armo, keyword);
                   // Record all nifs as keyword
@@ -572,8 +682,8 @@ registerPatcher<Locals, Settings>({
                     )
                   );
                   break;
-                case 2: // MaybeNo
-                case 3: // No
+                case 'No':
+                case 'Maybe No':
                   // Filter out relevant nifs that are definitely revealing
                   const hhashes = relevantHashes[keyword].filter(
                     (_, i) => relevantAnswers[keyword][i] !== Answer.Yes
@@ -589,7 +699,7 @@ registerPatcher<Locals, Settings>({
                     // TODO: How to handle No answer with multiple nifs invloved?
                   }
                   break;
-                case 4:
+                case 'Cancel':
                   throw new Error('Cancelled by user');
               }
             });
