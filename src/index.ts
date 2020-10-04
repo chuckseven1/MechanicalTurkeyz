@@ -292,6 +292,10 @@ interface Locals {
    */
   keywords: readonly KeywordInfo[];
   /**
+   * Handles to our created KYWD records.
+   */
+  kywds: RecordHandle[];
+  /**
    * List of keywords that need patching.
    */
   keywordsToPatch: { [recordid: string]: string[] };
@@ -382,13 +386,12 @@ registerPatcher<Locals, Settings>({
             taggednifs: loadMemories(),
             // Look up DefaultRace
             DefaultRace: xelib.GetRecord(0, 0x19),
-            keywords: settings.keywords.map((keyword) => {
+            keywords: settings.keywords.map((keyword) => keywords[keyword]),
+            kywds: settings.keywords.map((keyword) => {
               // Create KYWD records for keywords
               const kywd = xelib.AddElement(patchFile, 'KYWD\\KYWD');
               xelib.AddElement(kywd, 'EDID - Editor ID');
-              helpers.cacheRecord(kywd as RecordHandle, keyword);
-
-              return keywords[keyword];
+              return helpers.cacheRecord(kywd as RecordHandle, keyword);
             }),
             keywordsToPatch: {},
           };
@@ -400,10 +403,11 @@ registerPatcher<Locals, Settings>({
        * Clean up any of our KYWD records we didn't use.
        */
       finalize() {
-        for (const { id } of locals.keywords) {
-          const refrs = xelib.GetREFRs(patchFile, id);
-          if (refrs.length === 0) {
-            xelib.RemoveElement(patchFile, id);
+        xelib.BuildReferences(patchFile, true);
+        for (const kywd of locals.kywds) {
+          const refs = xelib.GetReferencedBy(kywd);
+          if (refs.length === 0) {
+            xelib.RemoveElement(patchFile, xelib.GetHexFormID(kywd));
           }
         }
       },
