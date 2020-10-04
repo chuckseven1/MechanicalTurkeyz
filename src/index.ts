@@ -339,11 +339,28 @@ function importMemories() {
   }
 
   // Load memories
-  const oldMemories = loadMemories();
+  const memories = loadMemories();
   const newMemories = loadMemories(filename);
 
   // Merge memories, preferring old ones if conflict
-  const memories = Object.assign(oldMemories, newMemories);
+  for (const hash in newMemories) {
+    const { filenames, keywords } = newMemories[hash]!;
+    const memory = memories[hash];
+
+    if (!memory) {
+      // Hash is new to us
+      memories[hash] = { filenames, keywords };
+      continue;
+    }
+
+    // Merge our memory of this hash with new one
+    memories[hash] = {
+      // Union of filenames
+      filenames: [...new Set([...memory.filenames, ...filenames])],
+      // Merge keyword answers, preferring ours on conflict
+      keywords: Object.assign(keywords, memory.keywords),
+    };
+  }
 
   // Save new combined memories
   saveMemories(memories);
