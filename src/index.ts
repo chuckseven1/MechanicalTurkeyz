@@ -16,45 +16,6 @@ const { dialog } = remote;
 // Promise global is bluebird
 declare const Promise: typeof Bluebird;
 
-interface Settings {
-  /**
-   * Path to program to view nifs
-   *
-   * @default OutfitStudio
-   */
-  nifViewer: string;
-  /**
-   * Keyword to apply
-   * @todo multiple keywords?
-   */
-  keyword: string;
-  /**
-   * Whether to recheck "maybe" answers
-   */
-  redoMaybes: boolean;
-  /**
-   * Body slots to consider unrelated to keyword (e.g., head things).
-   */
-  irrelevantSlots: readonly string[];
-}
-
-interface Locals {
-  /**
-   * Data directory
-   */
-  dir: string;
-  /**
-   * Track nifs that match tag
-   */
-  taggednifs: Memories;
-  /**
-   * Handle to DefaultRace record
-   *
-   * Used for filtering out ARMAs for creature races.
-   */
-  DefaultRace: RecordHandle;
-}
-
 enum Answer {
   /**
    * Tag definitely applies (do not ask again)
@@ -112,6 +73,143 @@ function getBodyTemplate(record: RecordHandle): ElementHandle | 0 {
   return bodt === 0 ? xelib.GetElement(record, 'BOD2') : bodt;
 }
 
+/**
+ * Types of keywords
+ *
+ * @todo better names?
+ */
+enum KeywordType {
+  /**
+   * If part of a thing is this keyword the whole thing is.
+   *
+   * @example ArmorHelmet
+   */
+  Inclusive,
+  /**
+   * Only applies if everything meets keyword criteria.
+   *
+   * @example SOS_Revealing
+   */
+  Exclusive,
+}
+
+function invalidKeywordType(type: never): never {
+  throw new Error(`Invalid keyword type: ${type}`);
+}
+
+/**
+ * @todo add other body slots
+ */
+enum BodySlot {
+  Head = '30 - Head',
+  Hair = '31 - Hair',
+  Body = '32 - Body',
+  Hands = '33 - Hands',
+  Forearms = '34 - Forearms',
+  LongHair = '41 - LongHair',
+  Circlet = '42 - Circlet',
+  Ears = '43 - Ears',
+  SoS = '52 - Unnamed',
+}
+
+/**
+ * Description of a keyword for the "learing" alrogirithm.
+ */
+interface KeywordInfo {
+  /**
+   * The EditorID of the keword.
+   */
+  id: string;
+  /**
+   * Description to show users.
+   */
+  description: string;
+  /**
+   * What type of keyword this is?
+   */
+  type: KeywordType;
+  /**
+   * Relevant slots (i.e., slots to which this keyword might apply).
+   */
+  relevantSlots: BodySlot[];
+  /**
+   * Irrelevant slots (i.e., slots which can be ignored).
+   */
+  irrelevantSlots: BodySlot[];
+  /**
+   * Slots which mean keywords should not be applied.
+   * (e.g., slot 52 for SOS_Revealing)
+   */
+  skipSlots: BodySlot[];
+}
+
+/**
+ * Known keywords.
+ * @todo read these from a JSON file or something so adding to it is easier.
+ */
+const keywords: Record<string, KeywordInfo> = {
+  SOS_Revealing: {
+    id: 'SOS_Revealing',
+    description: 'SoS revealing keyword',
+    type: KeywordType.Exclusive,
+    relevantSlots: [BodySlot.Body],
+    irrelevantSlots: [
+      BodySlot.Head,
+      BodySlot.Hair,
+      BodySlot.Hands,
+      BodySlot.Forearms,
+      BodySlot.LongHair,
+      BodySlot.Circlet,
+      BodySlot.Ears,
+    ],
+    skipSlots: [BodySlot.SoS],
+  },
+};
+
+interface Settings {
+  /**
+   * Path to program to view nifs
+   *
+   * @default OutfitStudio
+   */
+  nifViewer: string;
+  /**
+   * Keywords to apply
+   */
+  keywords: string[];
+  /**
+   * Whether to recheck "maybe" answers
+   */
+  redoMaybes: boolean;
+}
+
+interface Locals {
+  /**
+   * Data directory
+   */
+  dir: string;
+  /**
+   * Track nifs that match tag
+   */
+  taggednifs: Memories;
+  /**
+   * Handle to DefaultRace record
+   *
+   * Used for filtering out ARMAs for creature races.
+   */
+  DefaultRace: RecordHandle;
+  /**
+   * Descriptions of keywords being patched.
+   *
+   * @see KeywordInfo
+   */
+  keywords: KeywordInfo[];
+  /**
+   * List of keywords that need patching.
+   */
+  keywordsToPatch: { [recordid: string]: string[] };
+}
+
 registerPatcher<Locals, Settings>({
   info: info,
   gameModes: [xelib.gmSSE, xelib.gmTES5],
@@ -120,18 +218,8 @@ registerPatcher<Locals, Settings>({
     templateUrl: `${patcherUrl}/partials/settings.html`,
     defaultSettings: {
       nifViewer: 'CalienteTools/BodySlide/OutfitStudio x64.exe',
-      // TODO: Support other keywords?
-      keyword: 'SOS_Revealing',
+      keywords: ['SOS_Revealing'],
       redoMaybes: false,
-      irrelevantSlots: [
-        '30 - Head',
-        '31 - Hair',
-        '33 - Hands',
-        '34 - Forearms',
-        '41 - LongHair',
-        '42 - Circlet',
-        '43 - Ears',
-      ],
     },
   },
   getFilesToPatch(filenames) {
@@ -139,33 +227,60 @@ registerPatcher<Locals, Settings>({
     return filenames.filter((filename) => filename !== 'zEBD.esp');
   },
   execute(patchFile, helpers, settings, locals) {
-    const { keyword, redoMaybes, irrelevantSlots } = settings;
+    const { redoMaybes } = settings;
 
     return {
       initialize() {
-        locals.dir = xelib.GetGlobal('DataPath');
-        // @ts-ignore
-        locals.taggednifs = fh.loadJsonFile(memoryFile, {}) ?? {};
+        /**
+         * Help make sure I initialize everything.
+         */
+        function doInitialize() {
+          return {
+            dir: xelib.GetGlobal('DataPath'),
+            taggednifs: ((fh.loadJsonFile(memoryFile, {}) ??
+              {}) as unknown) as Memories,
+            // Look up DefaultRace
+            DefaultRace: xelib.GetRecord(0, 0x19),
+            keywords: settings.keywords.map((keyword) => {
+              // Create KYWD records for keywords
+              const kywd = xelib.AddElement(patchFile, 'KYWD\\KYWD');
+              xelib.AddElement(kywd, 'EDID - Editor ID');
+              helpers.cacheRecord(kywd as RecordHandle, keyword);
 
-        // Create KYWD records for keywords
-        const kywd = xelib.AddElement(patchFile, 'KYWD\\KYWD');
-        xelib.AddElement(kywd, 'EDID - Editor ID');
-        helpers.cacheRecord(kywd as RecordHandle, keyword);
+              return keywords[keyword];
+            }),
+            keywordsToPatch: {},
+          };
+        }
 
-        // Look up DefaultRace
-        locals.DefaultRace = xelib.GetRecord(0, 0x19);
+        locals = doInitialize();
       },
       process: [
         {
           load: {
             signature: 'ARMO',
             filter(record) {
-              const { DefaultRace } = locals;
+              const { keywords, keywordsToPatch, DefaultRace } = locals;
 
               const armo = xelib.GetWinningOverride(record);
+              const editorid = xelib.EditorID(armo);
 
-              if (xelib.HasKeyword(armo, keyword)) {
-                // Ignore ARMO that already have this keyword
+              keywordsToPatch[editorid] = settings.keywords;
+              function removeKeyword(keyword: string) {
+                keywordsToPatch[editorid] = keywordsToPatch[editorid].filter(
+                  (k) => k !== keyword
+                );
+              }
+
+              keywords.forEach(({ id }) => {
+                // Ignore ARMO that already has this keyword
+                if (xelib.HasKeyword(armo, id)) {
+                  // TODO: Add setting to check these too?
+                  removeKeyword(id);
+                }
+              });
+              // Ignore ARMO that already has all the keywords
+              if (keywordsToPatch[editorid].length === 0) {
                 return false;
               }
 
@@ -208,13 +323,35 @@ registerPatcher<Locals, Settings>({
                 return false;
               }
 
-              if (xelib.GetFlag(bod, 'First Person Flags', '52 - Unnamed')) {
-                // Ignore armor with SoS slot?
+              const flags = xelib.GetEnabledFlags(
+                bod,
+                'First Person Flags'
+              ) as BodySlot[];
+
+              keywords.forEach(({ id, skipSlots }) => {
+                // Ignore amror with any of the skip slots
+                if (flags.some((flag) => skipSlots.includes(flag))) {
+                  removeKeyword(id);
+                }
+              });
+              // Ingore armor if skipping every keyword
+              if (keywordsToPatch[editorid].length === 0) {
                 return false;
               }
 
-              // Check all slot 32 ARMOs?
-              return xelib.GetFlag(bod, 'First Person Flags', '32 - Body');
+              keywords.forEach(({ id, relevantSlots }) => {
+                // Ignore armor with none of the relevant slots
+                if (!flags.some((flag) => relevantSlots.includes(flag))) {
+                  removeKeyword(id);
+                }
+              });
+              // Ingore armor if skipping every keyword
+              if (keywordsToPatch[editorid].length === 0) {
+                return false;
+              }
+
+              // Found no reason to skip this record
+              return true;
             },
           },
           async patch(record) {
@@ -223,7 +360,11 @@ registerPatcher<Locals, Settings>({
             /**
              * Add a new hash/answer pair to our memories.
              */
-            function addAnswer(hash: string, answer: Answer): void {
+            function addAnswer(
+              keyword: string,
+              hash: string,
+              answer: Answer
+            ): void {
               const { filenames = [], keywords = {} } = taggednifs[hash] ?? {};
 
               keywords[keyword] = answer;
@@ -247,6 +388,10 @@ registerPatcher<Locals, Settings>({
 
             const editorid = xelib.EditorID(armo);
             helpers.logMessage(`Checking ${editorid}`);
+
+            // TODO: Do this better?
+            const keywordsToPatch = locals.keywordsToPatch[editorid];
+            delete locals.keywordsToPatch[editorid];
 
             // Get all the ARMAs for this ARMO
             const armas = xelib
@@ -298,43 +443,89 @@ registerPatcher<Locals, Settings>({
             helpers.logMessage(`Found nifs for ${editorid}: ${nifs}`);
 
             // Get previous answers about nif keywords
-            const answers: Answered[] = hashes.map((hash) => {
-              const answer = taggednifs[hash]?.keywords[keyword];
+            const answers: { [keyword: string]: Answered[] } = {};
+            keywordsToPatch.forEach((keyword) => {
+              answers[keyword] = hashes.map((hash) => {
+                const answer = taggednifs[hash]?.keywords[keyword];
 
-              // Handle "maybe" memories
-              switch (answer) {
-                case Answer.MaybeYes:
-                  return redoMaybes ? undefined : Answer.Yes;
-                case Answer.MaybeNo:
-                  return redoMaybes ? undefined : Answer.No;
-                default:
-                  return answer;
-              }
+                // Handle "maybe" memories
+                switch (answer) {
+                  case Answer.MaybeYes:
+                    return redoMaybes ? undefined : Answer.Yes;
+                  case Answer.MaybeNo:
+                    return redoMaybes ? undefined : Answer.No;
+                  default:
+                    return answer;
+                }
+              });
             });
             // Get previous answers about nif keywords for only relevant ARMAs
-            const relevantAnswers = answers.filter((_, i) => {
-              const arma = armas[i];
-              const bod = getBodyTemplate(arma);
-              const flags = xelib.GetEnabledFlags(bod, 'First Person Flags');
-              helpers.logMessage(`${xelib.EditorID(arma)}: ${flags}`);
+            const relevantAnswers: { [keyword: string]: Answered[] } = {};
+            const relevantHashes: { [keyword: string]: string[] } = {};
+            keywordsToPatch.forEach((keyword) => {
+              const { irrelevantSlots } = keywords[keyword];
 
-              // Check if unanswered ARMA relevant
-              return flags.some((flag) => !irrelevantSlots.includes(flag));
+              relevantHashes[keyword] = [];
+              relevantAnswers[keyword] = answers[keyword].filter((_, i) => {
+                const arma = armas[i];
+                const bod = getBodyTemplate(arma);
+                const flags = xelib.GetEnabledFlags(
+                  bod,
+                  'First Person Flags'
+                ) as BodySlot[];
+                helpers.logMessage(`${xelib.EditorID(arma)}: ${flags}`);
+
+                // Check if unanswered ARMA relevant
+                if (flags.some((flag) => !irrelevantSlots.includes(flag))) {
+                  relevantHashes[keyword].push(hashes[i]);
+                  return true;
+                }
+                return false;
+              });
             });
 
-            // Try to choose tag automagically based on relevant past answers
-            if (relevantAnswers.every((answer) => answer === Answer.Yes)) {
-              helpers.logMessage(
-                `All relevant nifs already known to be ${keyword}`
-              );
-              // Apply tag to this ARMO
-              return xelib.AddKeyword(armo, keyword);
-            }
-            // Assume no if single no?
-            if (relevantAnswers.some((answer) => answer === Answer.No)) {
-              helpers.logMessage(
-                `One of the relevant nifs already known to not be ${keyword}`
-              );
+            const keywordsToAsk: string[] = [];
+            keywordsToPatch.forEach((keyword) => {
+              const { type } = keywords[keyword];
+              switch (type) {
+                case KeywordType.Inclusive:
+                  // TODO: Implement this type
+                  throw new Error('Not yet implemented');
+                case KeywordType.Exclusive:
+                  // Try to choose tag automagically based on relevant past answers
+                  if (
+                    relevantAnswers[keyword].every(
+                      (answer) => answer === Answer.Yes
+                    )
+                  ) {
+                    helpers.logMessage(
+                      `All relevant nifs already known to be ${keyword}`
+                    );
+                    // Apply tag to this ARMO
+                    return xelib.AddKeyword(armo, keyword);
+                  }
+                  // Assume no if single no?
+                  if (
+                    relevantAnswers[keyword].some(
+                      (answer) => answer === Answer.No
+                    )
+                  ) {
+                    helpers.logMessage(
+                      `One of the relevant nifs already known to not be ${keyword}`
+                    );
+                    return;
+                  }
+                  break;
+                default:
+                  return invalidKeywordType(type);
+              }
+
+              // Ask the user for input
+              keywordsToAsk.push(keyword);
+            });
+
+            if (keywordsToAsk.length === 0) {
+              // Nothing to ask user about
               return;
             }
 
@@ -344,49 +535,69 @@ registerPatcher<Locals, Settings>({
               execFile(settings.nifViewer, nifs, { cwd: dir }, cb)
             );
 
-            // TODO: Show dialog and viewer at same time?
-            const choice: number = (dialog.showMessageBox({
-              // @ts-ignore
-              type: 'question',
-              message: `Apply ${keyword}?`,
-              title: editorid,
-              buttons: ['Yes', 'Maybe Yes', 'Maybe No', 'No', 'Cancel'],
-            }) as unknown) as number;
-            helpers.logMessage(`Choice: ${choice}`);
+            // Ask user about remaining keywords
+            const choices = await Promise.map(
+              keywordsToAsk,
+              (keyword) =>
+                // TODO: Show dialog and viewer at same time?
+                (dialog.showMessageBox({
+                  // @ts-ignore
+                  type: 'question',
+                  message: `Apply ${keyword}?`,
+                  title: editorid,
+                  buttons: ['Yes', 'Maybe Yes', 'Maybe No', 'No', 'Cancel'],
+                }) as unknown) as number
+            );
 
-            switch (choice) {
-              case 0: // Yes
-              case 1: // MaybeYes
-                // Apply tag to this ARMO
-                xelib.AddKeyword(armo, keyword);
-                // Record all nifs as keyword
-                hashes.forEach((hash) =>
-                  addAnswer(hash, choice === 0 ? Answer.Yes : Answer.MaybeYes)
-                );
-                break;
-              case 2: // MaybeNo
-              case 3: // No
-                // Filter out nifs that are definitely revealing
-                const hhashes = hashes.filter(
-                  (_, i) => answers[i] !== Answer.Yes
-                );
-                // If only one nif left, it must be the non-revealing one
-                if (hhashes.length === 1) {
-                  addAnswer(
-                    hhashes[0],
-                    choice === 3 ? Answer.No : Answer.MaybeNo
+            // Do "learning" from user answers
+            choices.forEach((choice, i) => {
+              const keyword = keywordsToAsk[i];
+
+              if (keywords[keyword].type !== KeywordType.Exclusive) {
+                // TODO: Implement other keyword types
+                throw new Error('Not yet implemented');
+              }
+
+              switch (choice) {
+                case 0: // Yes
+                case 1: // MaybeYes
+                  // Apply tag to this ARMO
+                  xelib.AddKeyword(armo, keyword);
+                  // Record all nifs as keyword
+                  hashes.forEach((hash) =>
+                    addAnswer(
+                      keyword,
+                      hash,
+                      choice === 0 ? Answer.Yes : Answer.MaybeYes
+                    )
                   );
-                } else {
-                  // TODO: How to handle No answer with multiple nifs invloved?
-                }
-                break;
-              case 4:
-                throw new Error('Cancelled by user');
-            }
+                  break;
+                case 2: // MaybeNo
+                case 3: // No
+                  // Filter out relevant nifs that are definitely revealing
+                  const hhashes = relevantHashes[keyword].filter(
+                    (_, i) => relevantAnswers[keyword][i] !== Answer.Yes
+                  );
+                  // If only one nif left, it must be the non-revealing one
+                  if (hhashes.length === 1) {
+                    addAnswer(
+                      keyword,
+                      hhashes[0],
+                      choice === 3 ? Answer.No : Answer.MaybeNo
+                    );
+                  } else {
+                    // TODO: How to handle No answer with multiple nifs invloved?
+                  }
+                  break;
+                case 4:
+                  throw new Error('Cancelled by user');
+              }
+            });
 
             // Update memory
             fh.saveJsonFile(memoryFile, taggednifs as any);
 
+            // Wait for viewer to close
             await viewer;
           },
         },
