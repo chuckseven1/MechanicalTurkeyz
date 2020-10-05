@@ -18,14 +18,20 @@
   "dependencies": {},
   "devDependencies": {
     "@types/bluebird": "^3.5.32",
+    "@types/gulp": "^4.0.7",
+    "@types/gulp-rename": "^0.0.33",
+    "@types/gulp-zip": "^4.0.1",
     "@types/xelib": "^0.6.0",
     "@types/zedit__upf": "^2.0.0",
     "angular": "^1.6.6",
     "gulp": "^4.0.0",
     "gulp-clean": "^0.3.2",
     "gulp-rename": "^1.2.2",
+    "gulp-typedoc": "^2.2.5",
     "gulp-typescript": "^6.0.0-alpha.1",
     "gulp-zip": "^4.1.0",
+    "ts-node": "^9.0.0",
+    "typedoc": "^0.19.2",
     "typescript": "^4.0.2"
   }
 }

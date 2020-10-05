@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "released": "10/3/2020",
   "updated": "10/3/2020",
+  "repo": "https://github.com/chuckseven1/MechanicalTurkeyz",
   "description": "Mechanical Turk Keyword patcher",
   "requires": ["unifiedPatchingFramework"],
   "moduleLoader": "UPF",

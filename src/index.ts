@@ -5,7 +5,7 @@ import { createReadStream } from 'fs';
 import { createHash } from 'crypto';
 import { remote } from 'electron';
 
-import type * as Bluebird from 'bluebird';
+import type Bluebird from 'bluebird';
 
 import type { ElementHandle, RecordHandle } from 'xelib';
 
@@ -71,26 +71,6 @@ function getBodyTemplate(record: RecordHandle): ElementHandle | 0 {
   const bodt = xelib.GetElement(record, 'BODT');
 
   return bodt === 0 ? xelib.GetElement(record, 'BOD2') : bodt;
-}
-
-/**
- * Types of keywords
- *
- * @todo better names?
- */
-const enum KeywordType {
-  /**
-   * If any part of a thing is this keyword the whole thing is.
-   *
-   * @example ArmorHelmet?
-   */
-  Inclusive,
-  /**
-   * Only applies if everything meets keyword criteria.
-   *
-   * @example SOS_Revealing
-   */
-  Exclusive,
 }
 
 function invalidKeywordType(type: never): never {
@@ -182,6 +162,26 @@ const enum BodySlot {
    */
   Misc60 = '60 - Unnamed',
   FX01 = '61 - FX01',
+}
+
+/**
+ * Types of keywords
+ *
+ * @todo better names?
+ */
+const enum KeywordType {
+  /**
+   * If any part of a thing is this keyword the whole thing is.
+   *
+   * @example ArmorHelmet?
+   */
+  Inclusive = 1,
+  /**
+   * Only applies if everything meets keyword criteria.
+   *
+   * @example SOS_Revealing
+   */
+  Exclusive = 2,
 }
 
 /**
@@ -366,15 +366,24 @@ function importMemories() {
   saveMemories(memories);
 }
 
+/**
+ * Open the docs of this patcher in the browser?
+ */
+function openDocs(page: string = 'modules/_index_') {
+  fh.openUrl(`${patcherUrl}/docs/${page}.html`);
+}
+
 registerPatcher<Locals, Settings>({
   info: info,
   gameModes: [xelib.gmSSE, xelib.gmTES5],
   settings: {
     label: 'Mechanical Turk armor keywords',
     templateUrl: `${patcherUrl}/partials/settings.html`,
-    controller($scope: any) {
+    // Angular gets mad if you use shorthand notation for the controller
+    controller: function ($scope: any) {
       // Add callbacks
       $scope.importMemories = importMemories;
+      $scope.openDocs = openDocs;
       // Add variables needed for rending settings?
       $scope.knownKeywords = Object.keys(keywords);
       $scope.models = Object.keys(Model);

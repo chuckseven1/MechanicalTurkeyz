@@ -4,7 +4,7 @@
     "strict": true,
     "moduleResolution": "node",
     "module": "CommonJS",
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "lib": [
       "ES2019",
       "ES2020.BigInt",
@@ -16,11 +16,9 @@
     "noUnusedParameters": true,
     "noImplicitAny": true,
     "rootDir": "src",
-    "outDir": "lib",
-    "sourceMap": true,
+    "outDir": "dist",
     "declaration": true,
-    "declarationMap": true,
     "stripInternal": true
   },
-  "exclude": ["lib"]
+  "exclude": ["dist", "gulpfile.ts"]
 }

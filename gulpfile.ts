@@ -1,14 +1,16 @@
-const fs = require('fs'),
-  gulp = require('gulp'),
-  ts = require('gulp-typescript'),
-  clean = require('gulp-clean'),
-  rename = require('gulp-rename'),
-  zip = require('gulp-zip');
+import fs from 'fs';
+import gulp from 'gulp';
+import ts from 'gulp-typescript';
+import typedoc from 'gulp-typedoc';
+import rename from 'gulp-rename';
+import zip from 'gulp-zip';
+// @ts-ignore
+import clean from 'gulp-clean';
 
 const tsProject = ts.createProject('tsconfig.json');
 
 gulp.task('clean', function () {
-  return gulp.src('dist', { read: false }).pipe(clean());
+  return gulp.src('dist', { read: false, allowEmpty: true }).pipe(clean());
 });
 
 gulp.task(
@@ -20,6 +22,8 @@ gulp.task(
         .pipe(tsProject())
         .js.on('error', console.log)
         .pipe(gulp.dest('dist')),
+
+      tsProject.src().pipe(typedoc({ out: 'dist/docs' })),
 
       gulp.src('partials/*.html').pipe(gulp.dest('dist/partials')),
 
@@ -33,7 +37,7 @@ gulp.task(
 );
 
 gulp.task('release', function () {
-  let moduleInfo = JSON.parse(fs.readFileSync('module.json')),
+  let moduleInfo = JSON.parse(fs.readFileSync('module.json').toString()),
     moduleId = moduleInfo.id,
     moduleVersion = moduleInfo.version,
     zipFileName = `${moduleId}-v${moduleVersion}.zip`;
