@@ -1,0 +1,9 @@
+{
+  "name": "MechanicalTurkeyz",
+  "tsconfig": "./tsconfig.json",
+  "out": "dist/docs",
+  "mode": "file",
+  "categorizeByGroup": false,
+  "theme": "minimal",
+  "includeVersion": true
+}

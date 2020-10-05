@@ -9,13 +9,24 @@ import type Bluebird from 'bluebird';
 
 import type { ElementHandle, RecordHandle } from 'xelib';
 
+// Don't be a module
 export = 0;
 
+/**
+ * @hidden
+ */
 const { dialog } = remote;
 
-// Promise global is bluebird
+/**
+ * Promise global is bluebird
+ *
+ * @hidden
+ */
 declare const Promise: typeof Bluebird;
 
+/**
+ * Possible answers from user about applying keyword to ARMO.
+ */
 const enum Answer {
   /**
    * Tag definitely applies (do not ask again)
@@ -35,6 +46,12 @@ const enum Answer {
   MaybeNo,
 }
 
+/**
+ * Possible previous answers about a nif.
+ *
+ * @see Answer
+ * @see Memory
+ */
 type Answered = Answer.Yes | Answer.No | undefined;
 
 /**
@@ -65,6 +82,7 @@ const memoryFile = 'MechanicalTurkeyz.json';
 
 /**
  * Fetcher either BODT or BOD2 from a record
+ *
  * @todo Does xelib have a function for this?
  */
 function getBodyTemplate(record: RecordHandle): ElementHandle | 0 {
@@ -73,6 +91,9 @@ function getBodyTemplate(record: RecordHandle): ElementHandle | 0 {
   return bodt === 0 ? xelib.GetElement(record, 'BOD2') : bodt;
 }
 
+/**
+ * @internal
+ */
 function invalidKeywordType(type: never): never {
   throw new Error(`Invalid keyword type: ${type}`);
 }
@@ -165,7 +186,6 @@ const enum BodySlot {
 }
 
 /**
- * Types of keywords
  *
  * @todo better names?
  */
@@ -242,11 +262,17 @@ const keywords: Record<string, KeywordInfo> = <const>{
   },
 };
 
+/**
+ * World model to display to user.
+ */
 enum Model {
   Male = 'Male world model\\MOD2',
   Female = 'Female world model\\MOD3',
 }
 
+/**
+ * Type for this UPF patcher's setttings.
+ */
 interface Settings {
   /**
    * Path to program to view nifs
@@ -260,16 +286,22 @@ interface Settings {
   keywords: readonly string[];
   /**
    * Whether to recheck "maybe" answers
+   *
+   * @default false
    */
   redoMaybes: boolean;
   /**
    * Which model to display when asking user about keywords.
    *
+   * @default 'Female'
    * @todo add both setting?
    */
   displayModel: keyof typeof Model;
 }
 
+/**
+ * Type for this UPF patcher's locals.
+ */
 interface Locals {
   /**
    * Data directory
@@ -367,9 +399,9 @@ function importMemories() {
 }
 
 /**
- * Open the docs of this patcher in the browser?
+ * Open the docs of this patcher in a browser.
  */
-function openDocs(page: string = 'modules/_index_') {
+function openDocs(page: string = 'index') {
   fh.openUrl(`${patcherUrl}/docs/${page}.html`);
 }
 

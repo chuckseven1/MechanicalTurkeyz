@@ -1,4 +1,8 @@
-import fs from 'fs';
+import { promises as fs } from 'fs';
+
+import Bluebird from 'bluebird';
+import rev from 'git-rev';
+
 import gulp from 'gulp';
 import ts from 'gulp-typescript';
 import typedoc from 'gulp-typedoc';
@@ -13,17 +17,23 @@ gulp.task('clean', function () {
   return gulp.src('dist', { read: false, allowEmpty: true }).pipe(clean());
 });
 
+const gitRevision = Bluebird.fromCallback<string>((done) =>
+  rev.long((long) => done(null, long))
+);
+
 gulp.task(
   'build',
-  gulp.series('clean', function () {
-    return Promise.all([
+  gulp.series('clean', async function () {
+    return Bluebird.all([
       tsProject
         .src()
         .pipe(tsProject())
         .js.on('error', console.log)
         .pipe(gulp.dest('dist')),
 
-      tsProject.src().pipe(typedoc({ out: 'dist/docs' })),
+      tsProject
+        .src()
+        .pipe(typedoc({ gitRevision: await gitRevision, out: 'dist/docs' })),
 
       gulp.src('partials/*.html').pipe(gulp.dest('dist/partials')),
 
@@ -36,17 +46,17 @@ gulp.task(
   })
 );
 
-gulp.task('release', function () {
-  let moduleInfo = JSON.parse(fs.readFileSync('module.json').toString()),
-    moduleId = moduleInfo.id,
-    moduleVersion = moduleInfo.version,
-    zipFileName = `${moduleId}-v${moduleVersion}.zip`;
+gulp.task('release', async function () {
+  const { id, version } = JSON.parse(
+      (await fs.readFile('module.json')).toString()
+    ),
+    zipFileName = `${id}-v${version}.zip`;
 
   console.log(`Packaging ${zipFileName}`);
 
   return gulp
     .src('dist/**/*', { base: 'dist/' })
-    .pipe(rename((path) => (path.dirname = `${moduleId}/${path.dirname}`)))
+    .pipe(rename((path) => (path.dirname = `${id}/${path.dirname}`)))
     .pipe(zip(zipFileName))
     .pipe(gulp.dest('.'));
 });

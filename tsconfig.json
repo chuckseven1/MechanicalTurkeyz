@@ -17,7 +17,6 @@
     "noImplicitAny": true,
     "rootDir": "src",
     "outDir": "dist",
-    "declaration": true,
     "stripInternal": true
   },
   "exclude": ["dist", "gulpfile.ts"]
